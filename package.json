@@ -1,0 +1,40 @@
+{
+  "name": "houston-kart-sim",
+  "productName": "Houston Kart Sim",
+  "version": "1.0.0",
+  "description": "Indoor kart racing simulator: realistic kart physics, AI racers, online leaderboard and multiplayer.",
+  "main": "main.js",
+  "author": "Houston Kart Sim contributors",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "build:game": "node scripts/build-game.js",
+    "start": "npm run build:game && electron .",
+    "dist:mac": "npm run build:game && electron-builder --mac --arm64 --x64 --publish never",
+    "dist:win": "npm run build:game && electron-builder --win --x64 --publish never"
+  },
+  "devDependencies": {
+    "@fontsource/ibm-plex-mono": "5.2.7",
+    "@fontsource/saira-condensed": "5.2.8",
+    "@supabase/supabase-js": "2.118.0",
+    "electron": "45.2.1",
+    "electron-builder": "26.18.0",
+    "three": "0.128.0"
+  },
+  "build": {
+    "appId": "io.github.houstonkartsim",
+    "productName": "Houston Kart Sim",
+    "files": ["main.js", "game/**/*", "package.json"],
+    "directories": { "buildResources": "build", "output": "dist" },
+    "afterPack": "scripts/adhoc-sign.js",
+    "mac": {
+      "target": ["zip", "dmg"],
+      "category": "public.app-category.racing-games",
+      "identity": null,
+      "artifactName": "Houston-Kart-Sim-mac-${arch}.${ext}"
+    },
+    "dmg": { "artifactName": "Houston-Kart-Sim-mac-${arch}.${ext}" },
+    "win": { "target": ["nsis"], "artifactName": "Houston-Kart-Sim-Setup.${ext}" },
+    "nsis": { "oneClick": true, "perMachine": false, "createDesktopShortcut": true, "createStartMenuShortcut": true, "shortcutName": "Houston Kart Sim" }
+  }
+}
