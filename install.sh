@@ -1,7 +1,7 @@
 #!/bin/bash
 # Houston Kart Sim installer for macOS: downloads the latest release and puts the app in Applications.
 set -euo pipefail
-REPO="__OWNER__/houston-kart-sim"
+REPO="4d1t-Codezz/houston-kart-sim"
 ARCH=$(uname -m); [ "$ARCH" = "arm64" ] || ARCH="x64"
 URL="https://github.com/$REPO/releases/latest/download/Houston-Kart-Sim-mac-$ARCH.zip"
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT

@@ -9,18 +9,18 @@ An indoor kart racing simulator for Windows and macOS: realistic kart physics, A
 **Windows:** open PowerShell and run:
 
 ```powershell
-irm https://raw.githubusercontent.com/__OWNER__/houston-kart-sim/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/4d1t-Codezz/houston-kart-sim/main/install.ps1 | iex
 ```
 
 **Mac:** open Terminal and run:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/__OWNER__/houston-kart-sim/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/4d1t-Codezz/houston-kart-sim/main/install.sh | bash
 ```
 
 Each installer downloads the latest release, installs it, and starts the game. Run the same line again to update.
 
-Prefer to download by hand? Grab the latest build from the [Releases page](https://github.com/__OWNER__/houston-kart-sim/releases/latest):
+Prefer to download by hand? Grab the latest build from the [Releases page](https://github.com/4d1t-Codezz/houston-kart-sim/releases/latest):
 
 - **Windows:** `Houston-Kart-Sim-Setup.exe`. Windows may show "Windows protected your PC" because the app isn't code-signed; click **More info → Run anyway**.
 - **Mac:** `Houston-Kart-Sim-mac-arm64.dmg` (Apple Silicon) or `-x64.dmg` (Intel). The app isn't notarized, so the first time, right-click it and choose **Open**, or allow it under **System Settings → Privacy & Security**.
