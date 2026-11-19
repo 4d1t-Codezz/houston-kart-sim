@@ -4,7 +4,7 @@ create table if not exists public.laps (
   id bigint generated always as identity primary key,
   player text not null check (char_length(player) between 4 and 16),
   name text not null check (char_length(name) between 1 and 16),
-  kart_class text not null check (kart_class in ('adult', 'junior')),
+  kart_class text not null check (kart_class in ('adult', 'junior', 'drift')),
   lap_ms integer not null check (lap_ms between 20000 and 180000),
   track text not null check (char_length(track) between 1 and 40),
   created_at timestamptz not null default now()

@@ -1,7 +1,7 @@
 {
   "name": "houston-kart-sim",
   "productName": "Houston Kart Sim",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Indoor kart racing simulator: realistic kart physics, AI racers, online leaderboard and multiplayer.",
   "main": "main.js",
   "author": "Houston Kart Sim contributors",
@@ -24,17 +24,40 @@
   "build": {
     "appId": "io.github.houstonkartsim",
     "productName": "Houston Kart Sim",
-    "files": ["main.js", "game/**/*", "package.json"],
-    "directories": { "buildResources": "build", "output": "dist" },
+    "files": [
+      "main.js",
+      "game/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
     "afterPack": "scripts/adhoc-sign.js",
     "mac": {
-      "target": ["zip", "dmg"],
+      "target": [
+        "zip",
+        "dmg"
+      ],
       "category": "public.app-category.racing-games",
       "identity": null,
       "artifactName": "Houston-Kart-Sim-mac-${arch}.${ext}"
     },
-    "dmg": { "artifactName": "Houston-Kart-Sim-mac-${arch}.${ext}" },
-    "win": { "target": ["nsis"], "artifactName": "Houston-Kart-Sim-Setup.${ext}" },
-    "nsis": { "oneClick": true, "perMachine": false, "createDesktopShortcut": true, "createStartMenuShortcut": true, "shortcutName": "Houston Kart Sim" }
+    "dmg": {
+      "artifactName": "Houston-Kart-Sim-mac-${arch}.${ext}"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "Houston-Kart-Sim-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Houston Kart Sim"
+    }
   }
 }

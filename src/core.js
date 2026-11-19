@@ -5,6 +5,8 @@
   const KARTS = {
     adult: { name: 'Adult', mass: 245, Iz: 52, L: 1.05, power: 14900, fMax: 1250, vMax: 15.65, regen: 300,
       brakeMax: 2900, vRev: 5.5, revForce: 1700, grip: 2.1, yawResp: 11.5, latGrip: 20, steerMax: 0.62, steerFade: 1000, cda: 0.62, crr: 0.018 },
+    drift: { name: 'Drift', mass: 240, Iz: 50, L: 1.05, power: 12500, fMax: 1150, vMax: 13.4, regen: 200,
+      brakeMax: 2500, vRev: 5, revForce: 1600, grip: 1.75, yawResp: 9, latGrip: 13, steerMax: 0.7, steerFade: 1000, cda: 0.62, crr: 0.016, drift: true },
     junior: { name: 'Junior', mass: 190, Iz: 40, L: 1.0, power: 4500, fMax: 720, vMax: 8.94, regen: 200,
       brakeMax: 2200, vRev: 4, revForce: 1300, grip: 2.1, yawResp: 11.5, latGrip: 20, steerMax: 0.62, steerFade: 1000, cda: 0.5, crr: 0.018 },
   };
@@ -154,7 +156,8 @@
     k.delta += clamp(k.steer * lock - k.delta, -4.2 * dt, 4.2 * dt); // ~1.3x the original 3.2 rad/s rack
     const thr = k.throttle, brk = k.brake, bg = k.bumpG == null ? 1 : k.bumpG, dr = k.draft || 0;
     let F = 0;
-    if (thr > 0.05) { if (v > -0.3) F += driveForce(kp, Math.max(v, 0), thr, dr * 0.6); else F += kp.brakeMax * thr; }
+    if (thr > 0.05) { if (v > -0.3) F += driveForce(kp, Math.max(v, 0), thr, k.vLim ? Math.min(dr * 0.6, k.vLim - kp.vMax) : dr * 0.6); else F += kp.brakeMax * thr; }
+    if (k.vLim && v > k.vLim + 0.3) F -= kp.brakeMax * 0.35; // pit limiter pulls you down to the limit
     k.reversing = false;
     if (brk > 0.05) {
       if (v > 0.35) { F -= brk * kp.brakeMax * bg; k.revT = 0; }
@@ -177,22 +180,23 @@
     if (over > 0 && av > 2) { const sc = Math.sign(v) * m * G * 0.45 * Math.min(1, over * 1.5); k.vx -= (sc / m) * dt; }
     // rear breakaway
     const brkF = v > 0.35 ? brk : 0;
-    const rearCap = gmax * (1 - 0.5 * brkF) * (0.72 + 0.28 * bg);
+    const rearCap = gmax * (kp.drift ? (0.74 - 0.18 * thr) : 1) * (1 - 0.5 * brkF) * (0.72 + 0.28 * bg);
     const demand = Math.abs(k.vx * k.r);
     const counter = k.r * k.delta < 0 && Math.abs(k.delta) > 0.04 ? Math.min(1, Math.abs(k.delta) / 0.25) : 0;
     if (av > 5 && demand > rearCap * 1.06) k.slide += (demand / rearCap - 1.06) * 6 * dt;
-    else k.slide -= (thr < 0.05 && brkF < 0.1 ? 1.5 : 0.9) * dt;
-    k.slide -= counter * 1.6 * dt;
-    k.slide = clamp(k.slide, 0, 1.6);
+    else k.slide -= (kp.drift ? (thr < 0.05 ? 1.1 : 0.35) : (thr < 0.05 && brkF < 0.1 ? 1.5 : 0.9)) * dt;
+    k.slide -= counter * (kp.drift ? 0.9 : 1.6) * dt;
+    k.slide = clamp(k.slide, 0, kp.drift ? 1 : 1.6);
     const sl = Math.min(1, k.slide);
     const wt = k.wallT > 0 ? Math.min(1, k.wallT / 0.25) : 0;
     k.r += (rT - k.r) * Math.min(1, kp.yawResp * (1 - 0.88 * sl) * (1 - 0.55 * wt) * dt);
-    if (sl > 0.02 && av > 1) k.r += Math.sign(k.r) * sl * sl * 12 * Math.min(1, av / 8) * (1 - 0.7 * counter) * dt;
+    if (sl > 0.02 && av > 1) k.r += Math.sign(k.r) * sl * sl * (kp.drift ? 7 : 12) * Math.min(1, av / 8) * (1 - (kp.drift ? 0.95 : 0.7) * counter) * dt;
+    if (kp.drift && av > 2) { const beta = Math.atan2(k.vy, Math.max(Math.abs(k.vx), 0.5)); const ex = Math.abs(beta) - 0.5; if (ex > 0 && k.r * beta < 0) k.r -= Math.sign(k.r) * ex * 9 * dt; } // past ~30 deg the hard rear bites back: drifts hold an angle instead of spinning
     k.r = clamp(k.r, -7, 7);
     const lg = kp.latGrip * (1 - 0.45 * wt) * (1 - 0.85 * sl);
     let nvx = k.vx + (ax + k.vy * k.r) * dt;
     let nvy = (k.vy - k.vx * k.r * dt + k.vx * rT * dt) * Math.exp(-lg * dt);
-    if (sl > 0.05) { const sp = Math.hypot(nvx, nvy); if (sp > 0.1) { const f = Math.max(0, 1 - sl * 2.5 * dt / Math.max(sp, 1)); nvx *= f; nvy *= f; } }
+    if (sl > 0.05) { const sp = Math.hypot(nvx, nvy); if (sp > 0.1) { const f = Math.max(0, 1 - sl * (kp.drift ? 0.9 : 2.5) * dt / Math.max(sp, 1)); nvx *= f; nvy *= f; } }
     if (k.wallT > 0) k.wallT -= dt;
     if (Math.abs(nvx) < 0.03 && thr < 0.05 && !k.reversing) nvx = 0;
     k.vx = nvx; k.vy = nvy; k.ax = ax; k.ay = nvx * k.r;
@@ -208,7 +212,7 @@
   // are sliding, so that rotation is allowed to play out before grip takes over again.
   function collideWalls(k, tr, dt = 1 / 240) {
     const p = project(tr, k.x, k.y, k.hint); k.hint = p.i; k.lat = p.lat; k.s = p.s;
-    const f = tr.field, kp = k.kp, hits = [];
+    const f = tr.cfield || tr.field, kp = k.kp, hits = [];
     let cnX = 0, cnY = 0, front = false;
     { const c = Math.cos(k.psi), s = Math.sin(k.psi);
       for (const [bx, by] of CORNERS) {
@@ -336,6 +340,7 @@
   function signedGap(a, b, L) { let ds = b.s - a.s; if (ds < -L / 2) ds += L; if (ds > L / 2) ds -= L; return ds; }
   function driveAI(k, ai, tr, line, prof, others, dt) {
     if (ai.pace == null) Object.assign(ai, makeAI(ai.skill != null ? (ai.skill - 0.9) / 0.1 : 0.7));
+    if (ai.path) return followPath(k, ai);
     const N = line.N, spd = Math.hypot(k.vx, k.vy), L = tr.length, rnd = ai.rnd || Math.random;
     const p = project(line, k.x, k.y, ai.li == null ? nearest(line, k.x, k.y) : ai.li, 6, 10); ai.li = p.i;
     const myLat = p.lat;
@@ -356,7 +361,7 @@
     const inside = Math.sign(ksum) || 1;
     const myTarget = Math.min(prof.v[p.i], prof.v[wrap(p.i + 6, N)]) * ai.pace;
     ai.passT -= dt;
-    if (!alongside) {
+    if (!alongside && !ai.formation) {
       if (ahead && gapA < 9 && (myTarget > aSpd * 0.98 || k.vx > aSpd + 0.3) && rnd() < 0.5 + ai.aggr) {
         if (ai.passT <= 0 || !ai.passSide) {
           // pick the side with room, leaning toward the inside of the next corner
@@ -390,12 +395,27 @@
     let vt = Math.min(prof.v[p.i], prof.v[look]) * ai.pace * (1 - 0.025 * Math.min(1.5, Math.abs(ai.offset)));
     if (vt < k.vx) vt *= ai.errMul;
     if (ahead && gapA < 3.2 && Math.abs(aLat - myLat) < 1.3) vt = Math.min(vt, aSpd * (0.96 + 0.05 * ai.aggr)); // don't punt the kart ahead (much)
+    if (ai.formation) { vt = Math.min(vt, prof.v[p.i] * 0.5); if (ahead && gapA < 7) vt = Math.min(vt, aSpd * (gapA < 4.5 ? 0.6 : 0.95)); ai.offTarget = 0; }
     const err = vt - k.vx;
     if ((k.slide || 0) > 0.3) { k.throttle = 0; k.brake = 0; return; }
     if (err > 0) { k.throttle = clamp(0.35 + err * 0.9, 0, 1); k.brake = 0; }
     else if (err > -0.5) { k.throttle = 0; k.brake = 0; }
     else { k.throttle = 0; k.brake = clamp(-err * 0.35, 0, 0.9); }
   }
+  // Pure pursuit along a polyline {x:[],y:[]} at a capped speed; optionally stop at the end (pit box, grid slot).
+  function followPath(k, ai) {
+    const P = ai.path, n = P.x.length, spd = Math.hypot(k.vx, k.vy);
+    while (ai.pi < n - 1 && Math.hypot(P.x[ai.pi] - k.x, P.y[ai.pi] - k.y) < 1.2 + 0.15 * spd) ai.pi++;
+    const tx = P.x[ai.pi], ty = P.y[ai.pi], ex = P.x[n - 1] - k.x, ey = P.y[n - 1] - k.y, dEnd = Math.hypot(ex, ey);
+    const c = Math.cos(k.psi), s = Math.sin(k.psi), gx = tx - k.x, gy = ty - k.y, lx = c * gx + s * gy, ly = -s * gx + c * gy;
+    const alpha = Math.atan2(ly, lx);
+    k.steer = clamp(Math.atan2(2 * k.kp.L * Math.sin(alpha), Math.max(0.6, Math.hypot(lx, ly))) / k.kp.steerMax, -1, 1);
+    let vt = ai.pathV || 6; if (ai.pathStop) vt = Math.min(vt, Math.sqrt(2 * 2.2 * Math.max(0, dEnd - 0.15)));
+    if (ai.pathStop && (dEnd < 0.35 || (ai.pi >= n - 1 && lx < 0))) { k.throttle = 0; k.brake = 1; ai.parked = true; return; }
+    if (!ai.pathStop && ai.pi >= n - 1 && dEnd < 2) { ai.path = null; ai.li = null; return; }
+    const err = vt - k.vx;
+    if (err > 0) { k.throttle = clamp(0.3 + err * 0.8, 0, 1); k.brake = 0; } else if (err > -0.4) { k.throttle = 0; k.brake = 0; } else { k.throttle = 0; k.brake = clamp(-err * 0.4, 0, 0.9); }
+  }
   function nearest(L, x, y) { let b = 0, bd = 1e18; for (let i = 0; i < L.N; i++) { const d = (L.x[i] - x) ** 2 + (L.y[i] - y) ** 2; if (d < bd) { bd = d; b = i; } } return b; }
-  root.KartCore = { makeAI, bumpAt, slipstream, KARTS, sdf, buildTrack, project, racingLine, racingLine2, speedProfile, makeKart, stepKart, collideWalls, collideKarts, driveAI, wrap, clamp, G };
+  root.KartCore = { nearest, followPath, makeAI, bumpAt, slipstream, KARTS, sdf, buildTrack, project, racingLine, racingLine2, speedProfile, makeKart, stepKart, collideWalls, collideKarts, driveAI, wrap, clamp, G };
 })(typeof window !== 'undefined' ? window : globalThis);

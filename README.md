@@ -1,6 +1,6 @@
 # Houston Kart Sim
 
-An indoor kart racing simulator for Windows and macOS: realistic kart physics, AI racers with an adjustable skill slider, a helmet cam, V10 / V8 / V6-turbo engine sounds, a worldwide lap-time leaderboard and live online races against other players.
+An indoor kart racing simulator for Windows and macOS: realistic kart physics, AI racers with an adjustable skill slider, a pit lane with formation laps, adult / junior / drift karts, a garage for your kart and helmet, night races with LED barriers, helmet and TV-broadcast cameras, V10 / V8 / V6-turbo engine sounds, a worldwide lap-time leaderboard and live online races.
 
 ![Houston Kart Sim](docs/screenshot.jpg)
 
@@ -32,7 +32,7 @@ Prefer to download by hand? Grab the latest build from the [Releases page](https
 | Throttle / brake (hold brake at a stop to reverse) | W / S or ↑ / ↓ (Space also brakes) |
 | Steer | A / D or ← / → |
 | Look left / right | Q / E |
-| Camera (helmet, chase, TV) | C |
+| Camera (helmet, chase, trackside, broadcast) | C |
 | Restart from the grid | T |
 | Marshal reset | R |
 | Sound on/off | M |
@@ -40,6 +40,13 @@ Prefer to download by hand? Grab the latest build from the [Releases page](https
 | Fullscreen | F11 (Windows) · Ctrl+Cmd+F (Mac) |
 
 A gamepad works too: right trigger throttle, left trigger brake, left stick steer.
+
+## Sessions
+
+- **Practice:** you start in the pit lane (13 mph limiter). Drive out, set laps, then pull back into the pit lane and stop in a box to end the session and see your lap list.
+- **Race:** the field leaves the pits one by one for a formation lap. Follow it round and stop in your highlighted grid box; the lights go when everyone is in place. After the flag, do a cool-down lap and stop in the pits for the results. **Reverse grid** puts the fastest drivers at the back.
+- **Garage:** pick your kart colour, accent, livery (carbon, gloss, split, stealth), number, helmet colours and design, and suit colour.
+- **Night race:** the hall lights go down and every barrier lights up as an animated LED display.
 
 ## Online play
 
