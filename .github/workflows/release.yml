@@ -25,6 +25,17 @@ jobs:
           HKS_SUPABASE_KEY: ${{ secrets.HKS_SUPABASE_KEY }}
         run: |
           if [ -n "$HKS_SUPABASE_URL" ]; then printf '{"url":"%s","key":"%s"}' "$HKS_SUPABASE_URL" "$HKS_SUPABASE_KEY" > online.json; fi
+      - name: Licensed kart model (encrypted in the repo; the key is a repository secret)
+        shell: bash
+        env:
+          HKS_ASSET_KEY: ${{ secrets.HKS_ASSET_KEY }}
+        run: |
+          if [ -n "$HKS_ASSET_KEY" ]; then
+            mkdir -p assets-private
+            printf '%s' "$HKS_ASSET_KEY" > "$RUNNER_TEMP/k"
+            openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in assets/kart.glb.enc -out assets-private/kart.glb -pass "file:$RUNNER_TEMP/k"
+            rm -f "$RUNNER_TEMP/k"
+          fi
       - run: npm run build:game
       - name: Package (macOS)
         if: runner.os == 'macOS'

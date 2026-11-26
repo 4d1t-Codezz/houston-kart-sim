@@ -3,3 +3,4 @@ dist/
 game/
 .DS_Store
 online.json
+assets-private/

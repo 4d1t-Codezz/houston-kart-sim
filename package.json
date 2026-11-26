@@ -1,7 +1,7 @@
 {
   "name": "houston-kart-sim",
   "productName": "Houston Kart Sim",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Indoor kart racing simulator: realistic kart physics, AI racers, online leaderboard and multiplayer.",
   "main": "main.js",
   "author": "Houston Kart Sim contributors",

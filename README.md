@@ -68,4 +68,7 @@ Releases are built by GitHub Actions whenever a tag like `v1.0.1` is pushed.
 
 ## About
 
+The kart and driver 3D model is a licensed asset (CGTrader, royalty-free license). It ships inside the built app only; the repository holds an encrypted copy that release builds decrypt with a private key. Builds from source without that key use the built-in karts.
+
+
 Unofficial fan project, not affiliated with or endorsed by any karting company. The layout is traced from a publicly posted track map, so corner radii are approximate. Code is MIT licensed.

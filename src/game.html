@@ -482,6 +482,7 @@ const REFL=(()=>{const c=document.createElement('canvas');c.width=c.height=128;c
 // with moulded sidewalls on 5-spoke rims, and a driver in street clothes, rental helmet, arms working the wheel.
 const COLORS=[0x1aa7ff,0xff6a00,0xe21b2b,0x18b04a,0xf2f2f2,0x7a2cff];
 const KG={};const _up=new THREE.Vector3(0,1,0),_v=new THREE.Vector3(),_w=new THREE.Vector3(),_e=new THREE.Vector3();
+const HC_EYE={x:-.15,y:.905};
 function setLimb(m,a,b){_v.subVectors(b,a);const len=_v.length()||1e-3;m.position.copy(a).addScaledVector(_v,.5);m.scale.set(1,len,1);m.quaternion.setFromUnitVectors(_up,_v.multiplyScalar(1/len))}
 const se=(a,n)=>{const c=Math.cos(a),s=Math.sin(a);return[Math.sign(c)*Math.pow(Math.abs(c),2/n),Math.sign(s)*Math.pow(Math.abs(s),2/n)]};
 // sweep a superellipse (or custom open profile) along a path; u runs along the path, v around the section
@@ -603,7 +604,47 @@ function mergeStatic(par){const groups=new Map();for(const m of par.children.sli
     const M=new THREE.Mesh(G,mat);M.castShadow=list[0].castShadow;M.receiveShadow=true;par.add(M)}}
 const SUITS=[0xff6a00,0x1e6bff,0xe21b2b,0x2bb24c,0xffd400,0x9a35ff,0x19c3ff];
 let kartNo=0;
-function kartMesh(color,ghost,opt={}){const KGx=kartGeo(),M=shared(),g=new THREE.Group(),body=new THREE.Group();g.add(body);const autoNum=[118,63,7,24,41,92,15,88,33,5,71,12][kartNo++%12];
+// ---- Purchased kart model: static parts merged per material; tyres, spindles, steering wheel, driver kept separate.
+const KM=(()=>{const gltf=window.__KARTGLTF;if(!gltf)return null;const sc=gltf.scene;sc.updateMatrixWorld(true);
+  const nodes={};sc.traverse(o=>{if(o.name&&o.name.startsWith('ART3D_')){(nodes[o.name]=nodes[o.name]||[]).push(o)}});
+  const meshesOf=n=>{const out=[];for(const o of nodes[n]||[])o.traverse(q=>{if(q.isMesh)out.push(q)});return out};
+  const bake=(m,off)=>{const g=m.geometry.clone();g.applyMatrix4(m.matrixWorld);if(off)g.translate(-off.x,-off.y,-off.z);return g};
+  const centerOf=n=>{const b=new THREE.Box3();for(const o of nodes[n]||[])b.expandByObject(o);return b.getCenter(new THREE.Vector3())};
+  const DYN=new Set(['ART3D_GOKART_FLtire','ART3D_GOKART_FRtire','ART3D_GOKART_LRtire','ART3D_GOKART_RRtire','ART3D_GOKART_FLspindle','ART3D_GOKART_FRspindle','ART3D_GOKART_wheel','ART3D_GOKART_leddisplay','ART3D_GOKART_driver','ART3D_GOKART_helmet','ART3D_GLOBES']);
+  const byMat=new Map();for(const n in nodes){if(DYN.has(n))continue;for(const m of meshesOf(n)){const g=bake(m).toNonIndexed();const k=m.material.name;if(!byMat.has(k))byMat.set(k,{mat:m.material,geos:[]});byMat.get(k).geos.push(g)}}
+  const merge=geos=>{const pos=[],nor=[],uv=[];for(const g of geos){const P=g.attributes.position,Nn=g.attributes.normal,U=g.attributes.uv;for(let i=0;i<P.count;i++){pos.push(P.getX(i),P.getY(i),P.getZ(i));if(Nn)nor.push(Nn.getX(i),Nn.getY(i),Nn.getZ(i));else nor.push(0,1,0);if(U)uv.push(U.getX(i),U.getY(i));else uv.push(0,0)}}
+    const G=new THREE.BufferGeometry();G.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));G.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));G.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));return G};
+  const statics=[...byMat.values()].map(v=>({geo:merge(v.geos),mat:v.mat,name:v.mat.name}));
+  for(const v of byMat.values()){if(v.mat.map)v.mat.map.anisotropy=8}
+  const tyre=n=>{const c=centerOf(n);return{c,parts:meshesOf(n).map(m=>({geo:bake(m,c),mat:m.material}))}};
+  const tyres={FL:tyre('ART3D_GOKART_FLtire'),FR:tyre('ART3D_GOKART_FRtire'),RL:tyre('ART3D_GOKART_LRtire'),RR:tyre('ART3D_GOKART_RRtire')};
+  const spindle=(n,c)=>meshesOf(n).map(m=>({geo:bake(m,c),mat:m.material}));const spL=spindle('ART3D_GOKART_FLspindle',tyres.FL.c),spR=spindle('ART3D_GOKART_FRspindle',tyres.FR.c);
+  const wc=centerOf('ART3D_GOKART_wheel');const wheel=[...meshesOf('ART3D_GOKART_wheel'),...meshesOf('ART3D_GOKART_leddisplay')].map(m=>({geo:bake(m,wc),mat:m.material}));
+  const one=n=>meshesOf(n).map(m=>({geo:bake(m),mat:m.material}));const driver=one('ART3D_GOKART_driver'),helmet=one('ART3D_GOKART_helmet'),gloves=one('ART3D_GLOBES');
+  const hb=new THREE.Box3();for(const o of nodes['ART3D_GOKART_helmet']||[])hb.expandByObject(o);const hc=hb.getCenter(new THREE.Vector3());
+  const axis=new THREE.Vector3(0,wc.y-.16,wc.z-.62).normalize(),swq=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1),axis),rot=new THREE.Matrix4().makeRotationFromQuaternion(swq.clone().invert());
+  for(const p of wheel)p.geo.applyMatrix4(rot);
+  return{statics,tyres,spL,spR,wc,axis,swq,wheel,driver,helmet,gloves,eye:{x:hc.z+.06,y:hc.y+.01}}})();
+if(KM){HC_EYE.x=KM.eye.x;HC_EYE.y=KM.eye.y}
+function modelKart(color,opt){const LV=opt.liv||{base:hex(color),acc:hex(color),helm:'#f2f2f2',suit:hex(color)};const g=new THREE.Group(),body=new THREE.Group();g.add(body);
+  const holder=new THREE.Group();holder.rotation.y=Math.PI/2;body.add(holder);
+  const paint=new THREE.MeshPhysicalMaterial({color:new THREE.Color(LV.base),roughness:.3,metalness:0,clearcoat:.9,clearcoatRoughness:.12});
+  const suit=new THREE.MeshStandardMaterial({color:new THREE.Color(LV.suit),roughness:.82});const helm=new THREE.MeshPhysicalMaterial({color:new THREE.Color(LV.helm),roughness:.15,clearcoat:1,clearcoatRoughness:.05});
+  const glove=new THREE.MeshStandardMaterial({color:0x151618,roughness:.75});
+  const mk=(geo,mat,par)=>{const m=new THREE.Mesh(geo,mat);m.castShadow=true;m.receiveShadow=true;par.add(m);return m};
+  for(const st of KM.statics){const isPaint=st.name==='ART3D_GOKART_BODYWORK';const mat=isPaint?(st.mat.map?Object.assign(paint.clone(),{map:st.mat.map}):paint):st.mat;mk(st.geo,mat,holder)}
+  const wheels=[];for(const [key,front] of [['FL',1],['FR',1],['RL',0],['RR',0]]){const t=KM.tyres[key];const piv=new THREE.Group();piv.position.copy(t.c);holder.add(piv);const spin=new THREE.Group();piv.add(spin);
+    for(const p of t.parts)mk(p.geo,p.mat,spin);if(key==='FL')for(const p of KM.spL)mk(p.geo,p.mat,piv);if(key==='FR')for(const p of KM.spR)mk(p.geo,p.mat,piv);wheels.push({piv,spin,front:!!front,axis:'x'})}
+  const sw=new THREE.Group();sw.position.copy(KM.wc);sw.quaternion.copy(KM.swq);holder.add(sw);const rim=new THREE.Group();sw.add(rim);
+  for(const p of KM.wheel)mk(p.geo,p.mat,rim);
+  const drv=new THREE.Group();holder.add(drv);drv.visible=!opt.empty;for(const p of KM.driver)mk(p.geo,suit,drv);for(const p of KM.gloves)mk(p.geo,glove,drv);
+  const head=new THREE.Group();drv.add(head);for(const p of KM.helmet)mk(p.geo,helm,head);
+  {const tl=new THREE.Mesh(KG.tail||(KG.tail=new THREE.BoxGeometry(.03,.035,.18)),MAT.tail||(MAT.tail=new THREE.MeshBasicMaterial({color:new THREE.Color(5,.25,.2)})));tl.position.set(-.94,.2,0);body.add(tl)}
+  if(!KG.blob){const c=document.createElement('canvas');c.width=c.height=128;const q=c.getContext('2d'),rg=q.createRadialGradient(64,64,4,64,64,62);rg.addColorStop(0,'rgba(0,0,0,.62)');rg.addColorStop(.55,'rgba(0,0,0,.32)');rg.addColorStop(1,'rgba(0,0,0,0)');q.fillStyle=rg;q.fillRect(0,0,128,128);
+    KG.blob=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1})}
+  const b=new THREE.Mesh(KG.blobG||(KG.blobG=new THREE.PlaneGeometry(2.3,1.75)),KG.blob);b.rotation.x=-Math.PI/2;b.position.y=.004;b.renderOrder=1;g.add(b);
+  g.userData={wheels,color,body,rim,hands:[],up:[],fore:[],elb:[],sh:[],head,drv,ghost:false,model:true,lastL:null,lastR:null};scene.add(g);return g}
+function kartMesh(color,ghost,opt={}){if(KM&&!ghost)return modelKart(color,opt);const KGx=kartGeo(),M=shared(),g=new THREE.Group(),body=new THREE.Group();g.add(body);const autoNum=[118,63,7,24,41,92,15,88,33,5,71,12][kartNo++%12];
   const LV=opt.liv||{base:hex(color),acc:hex(color),style:'carbon',num:autoNum,helm:autoNum%2?'#f2f2f2':'#141518',helmA:hex(color),hd:['stripes','flames','checker','split'][autoNum%4],suit:hex(color)};const num=+LV.num||autoNum;
   const op=ghost?{transparent:true,opacity:.3,depthWrite:false}:{};const T=m=>ghost?Object.assign(m.clone(),op):m;
   const paint=new THREE.MeshPhysicalMaterial(Object.assign({color:ghost?color:0xffffff,map:ghost?null:livery2(Object.assign({},LV,{num})),roughness:LV.style==='stealth'?.55:.3,metalness:0,clearcoat:LV.style==='stealth'?.3:.9,clearcoatRoughness:.15},op));
@@ -647,7 +688,7 @@ function kartMesh(color,ghost,opt={}){const KGx=kartGeo(),M=shared(),g=new THREE
     KG.blob=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1})}
     const b=new THREE.Mesh(KGx.blobG,KG.blob);b.rotation.x=-Math.PI/2;b.position.y=.004;b.renderOrder=1;g.add(b)}
   g.userData={wheels,color,body,rim,hands,up,fore,elb,sh:[shL,shR],head,drv,ghost:!!ghost,lastL:null,lastR:null};scene.add(g);return g}
-function poseKart(k,m){const u=m.userData;u.rim.rotation.x=-k.delta*2.3;
+function poseKart(k,m){const u=m.userData;if(u.model){u.rim.rotation.z=-k.delta*2.3;const ay=k.vx*k.r,ax=k.ax||0;u.body.rotation.x=C.clamp(ay*.0045,-.06,.06);u.body.rotation.z=C.clamp(ax*.0025,-.04,.04);u.body.position.y=(k.bumpH||0)*.8;return}u.rim.rotation.x=-k.delta*2.3;
   const ay=k.vx*k.r,ax=k.ax||0;u.body.rotation.x=C.clamp(ay*.0045,-.06,.06);u.body.rotation.z=C.clamp(ax*.0025,-.04,.04);u.body.position.y=(k.bumpH||0)*.8;
   u.head.rotation.x=C.clamp(ay*.012,-.15,.15);
   if(u.ghost||!u.drv.visible)return;m.updateMatrixWorld(true);
@@ -905,8 +946,8 @@ function updateCamera(dt){const k=player;const c=Math.cos(k.psi),s=Math.sin(k.ps
     const vib=.0021*Math.min(1,spd/12)+.0004+Math.abs(k.bumpH||0)*.35+HC.shake*.025,t=HC.t;
     const jx=(Math.sin(t*71)+Math.sin(t*113)*.6+Math.sin(t*23)*.5)*vib,jy=(Math.sin(t*89)+Math.sin(t*131)*.5+Math.sin(t*17)*.6)*vib;
     if(HC.psiF===null)HC.psiF=k.psi;{let dp=k.psi-HC.psiF;dp=Math.atan2(Math.sin(dp),Math.cos(dp));HC.psiF+=dp*Math.min(1,dt*15)}
-    const lx=-.15-HC.pitch*.25,ly=HC.slide;const hx=k.x+c*lx-s*ly,hy=k.y+s*lx+c*ly;
-    camera.position.set(hx+jx*.5,.905+(k.bumpH||0)*.8+jy,-hy);
+    const lx=HC_EYE.x-HC.pitch*.25,ly=HC.slide;const hx=k.x+c*lx-s*ly,hy=k.y+s*lx+c*ly;
+    camera.position.set(hx+jx*.5,HC_EYE.y+(k.bumpH||0)*.8+jy,-hy);
     const lk=HC.look,la=Math.abs(lk)/2.094;camera.rotation.set(-.2*(1-.6*la)+HC.pitch+jy*.6,HC.psiF-Math.PI/2+HC.yawOff*(1-la)+lk,HC.lean*(1-la)+jx*.8);
     const hf=(camera.aspect<1?96:80)+(POST?8:0);if(camera.fov!==hf){camera.fov=hf;camera.updateProjectionMatrix()}camInit=true;return}
   let tp,tl,fov=68;
@@ -935,7 +976,7 @@ function drawVisor(){const c=$('visor');const show=running&&camMode===0;c.hidden
   g.lineCap='round';for(let i=0;i<7;i++){const x=rnd()*W,y=H*.2+rnd()*H*.6,a=rnd()*3.14,L=u*(.03+rnd()*.09);g.strokeStyle='rgba(230,235,240,'+(.025+rnd()*.035).toFixed(3)+')';g.lineWidth=dpr*.8;g.beginPath();g.moveTo(x,y);g.quadraticCurveTo(x+Math.cos(a)*L*.5+L*.1,y+Math.sin(a)*L*.5,x+Math.cos(a)*L,y+Math.sin(a)*L);g.stroke()}
   g.globalCompositeOperation='source-over'}
 function render(dt){
-  for(const k of karts){const m=k.mesh;m.position.set(k.x,0,-k.y);m.rotation.y=k.psi;for(const w of m.userData.wheels){if(w.front)w.piv.rotation.y=k.delta;w.spin.rotation.z=-k.wheelRot}poseKart(k,m)}
+  for(const k of karts){const m=k.mesh;m.position.set(k.x,0,-k.y);m.rotation.y=k.psi;for(const w of m.userData.wheels){if(w.front)w.piv.rotation.y=k.delta;if(w.axis)w.spin.rotation.x=k.wheelRot;else w.spin.rotation.z=-k.wheelRot}poseKart(k,m)}
   if(ghostMesh){let show=false;if(bestRec&&player.lapStart!==null&&running){const t=simTime-player.lapStart,i=Math.floor(t*30),R=bestRec.t;
       if((i+2)*4<=R.length){const f=t*30-i,a=i*4,b=a+4;const x=R[a]+(R[b]-R[a])*f,y=R[a+1]+(R[b+1]-R[a+1])*f;let dp=R[b+2]-R[a+2];dp=Math.atan2(Math.sin(dp),Math.cos(dp));
         ghostMesh.position.set(x,0,-y);ghostMesh.rotation.y=R[a+2]+dp*f;show=true}}ghostMesh.visible=show&&GHOSTON}
@@ -1048,7 +1089,9 @@ window.__sim={advance(sec,inp){if(inp)Object.assign(keys,inp);for(let t=0;t<sec;
   get state(){return{x:player.x,y:player.y,mph:player.vx*2.237,lap:player.lap,s:player.s,laps:player.laps,t:simTime,locked:player.locked}},cam:cycleCam};
 }
 (function(){const load=src=>new Promise(res=>{const img=new Image();img.onload=()=>{const c=document.createElement('canvas');c.width=img.width;c.height=img.height;const g=c.getContext('2d');g.drawImage(img,0,0);res(g.getImageData(0,0,c.width,c.height).data)};img.src='data:image/png;base64,'+src});
-  Promise.all([load(FLOOR.png),FLOOR.png2?load(FLOOR.png2):Promise.resolve(null)]).then(([px,px2])=>{const n=FLOOR.w*FLOOR.h;
+  const glb=new Promise(res=>{if(!window.KART_GLB_B64||!THREE.GLTFLoader)return res(null);try{const bin=atob(window.KART_GLB_B64),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+    new THREE.GLTFLoader().parse(u.buffer,'',g=>res(g),e=>{console.warn('kart model failed',e);res(null)})}catch(e){console.warn('kart model failed',e);res(null)}});
+  Promise.all([load(FLOOR.png),FLOOR.png2?load(FLOOR.png2):Promise.resolve(null),glb]).then(([px,px2,gltf])=>{window.__KARTGLTF=gltf;const n=FLOOR.w*FLOOR.h;
     const F={d:new Uint8Array(n),dT:new Uint8Array(n),blue:new Uint8Array(n),road:new Uint8Array(n),run:new Uint8Array(n),pit:new Uint8Array(n)};
     for(let i=0;i<n;i++){F.d[i]=px[i*4];F.dT[i]=px2?px2[i*4]:px[i*4];F.blue[i]=px[i*4+1]>127?1:0;const b=px[i*4+2];F.road[i]=b>60?1:0;F.run[i]=b>127&&b<220?1:0;F.pit[i]=b>60&&b<=127?1:0}main(F)})})();
 </script>
