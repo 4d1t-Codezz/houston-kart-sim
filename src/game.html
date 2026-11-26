@@ -151,6 +151,7 @@ details ul{padding-left:18px;margin:8px 0} kbd{font:600 12px var(--mono);backgro
     <div class="grp"><div class="lbl">Race options</div><div class="opts">
       <button class="opt" type="button" id="oRev" aria-pressed="false">Reverse grid<small>Fastest drivers start at the back</small></button>
       <button class="opt" type="button" id="oNight" aria-pressed="false">Night race<small>Lights down, LED barriers on</small></button>
+      <button class="opt" type="button" id="oGhost" aria-pressed="true">Ghost car<small>Show your best lap in practice</small></button>
     </div></div>
     <div class="grp"><div class="lbl">Garage · your kart and helmet</div><div class="garage">
       <label>Kart colour<input type="color" id="gBase"></label><label>Accent<input type="color" id="gAcc"></label>
@@ -159,6 +160,11 @@ details ul{padding-left:18px;margin:8px 0} kbd{font:600 12px var(--mono);backgro
       <label>Helmet<input type="color" id="gHelm"></label><label>Helmet accent<input type="color" id="gHelmA"></label>
       <label>Helmet design<select id="gHD"><option value="stripes">Stripes</option><option value="flames">Flames</option><option value="checker">Checker</option><option value="split">Split</option><option value="solid">Solid</option></select></label>
       <label>Race suit<input type="color" id="gSuit"></label>
+    </div></div>
+    <div class="grp"><div class="lbl">Volume</div><div class="garage">
+      <label>Master<input type="range" id="vMaster" min="0" max="100" aria-label="Master volume"></label>
+      <label>Engine<input type="range" id="vEngine" min="0" max="100" aria-label="Engine volume"></label>
+      <label>Effects<input type="range" id="vFx" min="0" max="100" aria-label="Tyres, wind and impact volume"></label>
     </div></div>
     <div class="grp"><div class="lbl">Engine sound</div><div class="opts" id="engOpts">
       <button class="opt" type="button" data-eng="v10" aria-pressed="true">V10<small>2005 F1 · 18,200 rpm scream</small></button>
@@ -366,16 +372,20 @@ const LEDS={p:[],a:[],g:[],ga:[],gd:[],acc:0};
  const pos=[],col=[],uvs=[],lp=[],pins=[];const red=new THREE.Color(0xb3121b),wht=new THREE.Color(0xd4d7da);let bi=0;
  const push=(p,c,u,v)=>{pos.push(p[0],p[1],p[2]);col.push(c.r,c.g,c.b);uvs.push(u,v)};
  for(const flat of FLOOR.walls){const P=[];for(let i=0;i<flat.length;i+=2)P.push([flat[i],-flat[i+1]]);
-   const Q=[];for(let i=0;i<P.length-1;i++){const a=P[i],b=P[i+1],n=Math.max(1,Math.round(Math.hypot(b[0]-a[0],b[1]-a[1])/1.2));for(let j=0;j<n;j++)Q.push([a[0]+(b[0]-a[0])*j/n,a[1]+(b[1]-a[1])*j/n])}Q.push(P[P.length-1]);
-   for(let i=0;i<Q.length-1;i++){const a=Q[i],b=Q[i+1],L=Math.hypot(b[0]-a[0],b[1]-a[1]);if(L<.05)continue;const tx=(b[0]-a[0])/L,ty=(b[1]-a[1])/L;
+   // 0.4 m segments snapped onto the exact wall line the physics uses (so tight apexes don't show straight chords cutting off the curve)
+   const Q=[];for(let i=0;i<P.length-1;i++){const a=P[i],b=P[i+1],n=Math.max(1,Math.ceil(Math.hypot(b[0]-a[0],b[1]-a[1])/.4));for(let j=0;j<n;j++)Q.push([a[0]+(b[0]-a[0])*j/n,a[1]+(b[1]-a[1])*j/n])}Q.push(P[P.length-1].slice());
+   for(const q of Q)for(let it=0;it<4;it++){const d=C.sdf(tr.cfield,q[0],q[1]),gx=(C.sdf(tr.cfield,q[0]+.05,q[1])-C.sdf(tr.cfield,q[0]-.05,q[1]))/.1,gy=(C.sdf(tr.cfield,q[0],q[1]+.05)-C.sdf(tr.cfield,q[0],q[1]-.05))/.1,g2=gx*gx+gy*gy;if(g2<1e-4)break;q[0]-=gx*d/g2;q[1]-=gy*d/g2}
+   const SA=[0];for(let i=1;i<Q.length;i++)SA.push(SA[i-1]+Math.hypot(Q[i][0]-Q[i-1][0],Q[i][1]-Q[i-1][1]));const blk=i=>Math.floor((SA[i]+SA[i+1])/2/1.2);const shade={};
+   for(let i=0;i<Q.length-1;i++){const a=Q[i],b=Q[i+1],L=SA[i+1]-SA[i];if(L<.02)continue;const tx=(b[0]-a[0])/L,ty=(b[1]-a[1])/L;
      const mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2;let gx=C.sdf(tr.cfield,mx+.15,my)-C.sdf(tr.cfield,mx-.15,my),gy=C.sdf(tr.cfield,mx,my+.15)-C.sdf(tr.cfield,mx,my-.15);const gl=Math.hypot(gx,gy)||1;
-     const ox=-gx/gl,oy=-gy/gl;const base=((bi++)%2?red:wht).clone().multiplyScalar(.93+Math.random()*.1);const vr=(Math.random()*4)|0;
-     const A=[a[0]+tx*.014,a[1]+ty*.014],B=[b[0]-tx*.014,b[1]-ty*.014];const pt=(E,pr)=>[E[0]+ox*pr[0],pr[1],-(E[1]+oy*pr[0])];
-     const U0=vr/4+.01,U1=(vr+1)/4-.01;
+     const bk=blk(i),first=i===0||blk(i-1)!==bk,last=i===Q.length-2||blk(i+1)!==bk;if(!shade[bk])shade[bk]={f:.93+Math.random()*.1,vr:(Math.random()*4)|0};
+     const ox=-gx/gl,oy=-gy/gl;const base=((bi+bk)%2?red:wht).clone().multiplyScalar(shade[bk].f);const vr=shade[bk].vr;
+     const A=first?[a[0]+tx*.014,a[1]+ty*.014]:a,B=last?[b[0]-tx*.014,b[1]-ty*.014]:b;const pt=(E,pr)=>[E[0]+ox*pr[0],pr[1],-(E[1]+oy*pr[0])];
+     const fu=x=>Math.min(1,Math.max(0,(x-bk*1.2)/1.2)),U0=vr/4+.01+fu(SA[i])*.23,U1=vr/4+.01+fu(SA[i+1])*.23;
      for(let k=0;k<PROFL.length-1;k++){const p0=PROFL[k],p1=PROFL[k+1],v0=PL[k]/PT,v1=PL[k+1]/PT;const a0=pt(A,p0),a1=pt(A,p1),b0=pt(B,p0),b1=pt(B,p1);
        push(a0,base,U0,v0);push(b0,base,U1,v0);push(b1,base,U1,v1);push(a0,base,U0,v0);push(b1,base,U1,v1);push(a1,base,U0,v1)}
-     for(const [E,s] of [[A,1],[B,-1]]){const cc=base.clone().multiplyScalar(.7);const ctr=pt(E,[.17,.28]);for(let k=0;k<PROFL.length-1;k++){const p0=pt(E,PROFL[k]),p1=pt(E,PROFL[k+1]);if(s>0){push(ctr,cc,.5,.5);push(p1,cc,.5,.5);push(p0,cc,.5,.5)}else{push(ctr,cc,.5,.5);push(p0,cc,.5,.5);push(p1,cc,.5,.5)}}}
-     pins.push(a[0]+ox*.17,-(a[1]+oy*.17));
+     for(const [E,sg,on] of [[A,1,first],[B,-1,last]]){if(!on)continue;const cc=base.clone().multiplyScalar(.7);const ctr=pt(E,[.17,.28]);for(let k=0;k<PROFL.length-1;k++){const p0=pt(E,PROFL[k]),p1=pt(E,PROFL[k+1]);if(sg>0){push(ctr,cc,.5,.5);push(p1,cc,.5,.5);push(p0,cc,.5,.5)}else{push(ctr,cc,.5,.5);push(p0,cc,.5,.5);push(p1,cc,.5,.5)}}}
+     if(first)pins.push(a[0]+ox*.17,-(a[1]+oy*.17));
      {const q=(E,u,h)=>[E[0]+ox*u,h,-(E[1]+oy*u)],s0=LEDS.acc,s1=LEDS.acc+L;LEDS.acc=s1;const a0=q(A,-.006,.43),b0=q(B,-.006,.43),a1=q(A,-.006,.5),b1=q(B,-.006,.5);LEDS.p.push(...a0,...b0,...b1,...a0,...b1,...a1);LEDS.a.push(s0,s1,s1,s0,s1,s0);
       const g0=q(A,0,.01),g1=q(B,0,.01),g2=q(B,-1,.01),g3=q(A,-1,.01);LEDS.g.push(...g0,...g1,...g2,...g0,...g2,...g3);LEDS.ga.push(s0,s1,s1,s0,s1,s0);LEDS.gd.push(0,0,1,0,1,1)}
      if(blueAt(mx+ox*.9,my+oy*.9)){const q=(E,u,h)=>[E[0]+ox*u,h,-(E[1]+oy*u)];const a0=q(a,.05,.565),b0=q(b,.05,.565),a1=q(a,.11,.57),b1=q(b,.11,.57);lp.push(...a0,...b0,...b1,...a0,...b1,...a1)}}}
@@ -502,7 +512,7 @@ function kartGeo(){if(KG.ok)return KG;KG.ok=1;
   // rear bumper: full-width plastic bar behind exposed rear tyres
   KG.rbump=sweep(curve([[-.78,.16,-.73],[-.88,.17,-.58],[-.93,.17,-.2],[-.935,.17,0],[-.93,.17,.2],[-.88,.17,.58],[-.78,.16,.73]],44),t=>({w:.11*ease(t,.05)+.02,h:.17*ease(t,.05)+.03,n:3.6}),{m:22,caps:1});
   {const U=[];for(let j=0;j<=24;j++){const a=Math.PI+j/24*Math.PI;U.push([Math.cos(a)*.2,.12+Math.sin(a)*.12])}
-   KG.seat=sweep(curve([[.0,.14,0],[-.22,.11,0],[-.37,.16,0],[-.45,.34,0],[-.5,.6,0]],26),()=>({pts:U}),{m:24})}
+   KG.seat=sweep(curve([[.0,.14,0],[-.22,.11,0],[-.36,.15,0],[-.43,.3,0],[-.47,.47,0]],26),()=>({pts:U}),{m:24})}
   KG.tray=(()=>{const s=new THREE.Shape(),w=.3,r=.1;s.moveTo(-.6+r,-w);s.lineTo(.62-r,-w);s.quadraticCurveTo(.62,-w,.62,-w+r);s.lineTo(.62,w-r);s.quadraticCurveTo(.62,w,.62-r,w);s.lineTo(-.6+r,w);s.quadraticCurveTo(-.6,w,-.6,w-r);s.lineTo(-.6,-w+r);s.quadraticCurveTo(-.6,-w,-.6+r,-w);
     const g=new THREE.ExtrudeGeometry(s,{depth:.008,bevelEnabled:false});g.rotateX(-Math.PI/2);g.translate(0,.045,0);return g})();
   KG.tube=new THREE.CylinderGeometry(.014,.014,1,10);KG.tubeB=new THREE.CylinderGeometry(.016,.016,1,12);
@@ -516,7 +526,7 @@ function kartGeo(){if(KG.ok)return KG;KG.ok=1;
   KG.tf=tyre(.137,.14);KG.trr=tyre(.145,.225);
   const lip=(R,W)=>{const g=new THREE.CylinderGeometry(R,R,W,28,1,true);g.rotateX(Math.PI/2);return g};KG.lipF=lip(.08,.11);KG.lipR=lip(.085,.17);
   KG.hubc=new THREE.CylinderGeometry(.03,.03,.06,16);KG.hubc.rotateX(Math.PI/2);KG.spk=new THREE.BoxGeometry(.018,.06,.012);
-  KG.torso=(()=>{const p=[[.001,-.24],[.13,-.23],[.165,-.12],[.175,0],[.168,.12],[.145,.19],[.075,.23],[.001,.235]].map(a=>new THREE.Vector2(a[0],a[1]));const g=new THREE.LatheGeometry(p,24);g.scale(1,1,.72);return g})();
+  KG.torso=(()=>{const p=[[.001,-.25],[.15,-.24],[.19,-.12],[.205,0],[.215,.12],[.2,.19],[.1,.245],[.001,.25]].map(a=>new THREE.Vector2(a[0],a[1]));const g=new THREE.LatheGeometry(p,28);g.scale(.62,1,1);return g})();
   KG.arm=capsule(.043,1,10);KG.armU=capsule(.05,1,10);KG.leg=capsule(.062,1,12);KG.joint=new THREE.SphereGeometry(.047,12,10);KG.hand=new THREE.SphereGeometry(.042,12,10);KG.hand.scale(1.2,.9,1);
   KG.boot=new THREE.BoxGeometry(.24,.08,.09);KG.neck=new THREE.CylinderGeometry(.06,.065,.1,12);
   KG.helm=(()=>{const p=[[.001,.168],[.07,.16],[.118,.132],[.148,.08],[.158,.02],[.154,-.04],[.142,-.092],[.124,-.13],[.11,-.145]].map(a=>new THREE.Vector2(a[0],a[1]));const g=new THREE.LatheGeometry(p,36);g.scale(1.1,1,.95);return g})();
@@ -525,7 +535,7 @@ function kartGeo(){if(KG.ok)return KG;KG.ok=1;
 const MAT={};function shared(){if(MAT.ok)return MAT;MAT.ok=1;
   MAT.frame=new THREE.MeshStandardMaterial({color:0x3a3f46,roughness:.3,metalness:.9});MAT.chrome=new THREE.MeshStandardMaterial({color:0xd6dbe0,roughness:.12,metalness:1});
   MAT.tray=new THREE.MeshStandardMaterial({color:0x15171a,roughness:.5,metalness:.3});
-  MAT.seat=new THREE.MeshPhysicalMaterial({color:0x10223a,roughness:.22,clearcoat:1,clearcoatRoughness:.1,side:THREE.DoubleSide});
+  MAT.seat=new THREE.MeshPhysicalMaterial({color:0x121315,roughness:.22,clearcoat:1,clearcoatRoughness:.1,side:THREE.DoubleSide});
   const tt=(()=>{const c=document.createElement('canvas');c.width=1024;c.height=128;const g=c.getContext('2d');g.fillStyle='#1d1d1f';g.fillRect(0,0,1024,128);
     for(let i=0;i<3000;i++){g.fillStyle='rgba(255,255,255,'+(Math.random()*.035).toFixed(3)+')';g.fillRect(Math.random()*1024,Math.random()*128,2,1)}
     g.fillStyle='#262628';g.fillRect(0,40,1024,48);g.fillStyle='rgba(0,0,0,.35)';for(let i=0;i<60;i++)g.fillRect(Math.random()*1024,44+Math.random()*40,30+Math.random()*80,1);
@@ -556,7 +566,7 @@ function livery2(L){const c=document.createElement('canvas');c.width=1024;c.heig
 function helmTex2(H){const c=document.createElement('canvas');c.width=512;c.height=256;const g=c.getContext('2d');const B=hex(H.helm),A=hex(H.helmA);
   g.fillStyle=B;g.fillRect(0,0,512,256);g.fillStyle=A;
   if(H.hd==='stripes'){g.fillRect(0,0,512,24);for(let i=0;i<8;i++){g.beginPath();g.moveTo(i*64,30);g.lineTo(i*64+34,150);g.lineTo(i*64+52,150);g.lineTo(i*64+22,30);g.fill()}}
-  else if(H.hd==='flames'){for(let i=0;i<10;i++){const x=i*52;g.beginPath();g.moveTo(x,190);g.quadraticCurveTo(x+10,120,x+30,60+(i%3)*18);g.quadraticCurveTo(x+34,120,x+52,190);g.fill()}g.fillRect(0,170,512,30)}
+  else if(H.hd==='flames'){g.fillRect(0,172,512,30);for(let i=0;i<8;i++){const x=i*64,h=50+(i%3)*22;g.beginPath();g.moveTo(x,186);g.bezierCurveTo(x+18,160,x+30,140-h*.3,x+92,150-h);g.bezierCurveTo(x+60,150-h*.4,x+52,170,x+46,186);g.closePath();g.fill()}}
   else if(H.hd==='checker'){for(let y=0;y<6;y++)for(let x=0;x<32;x++)if((x+y)%2)g.fillRect(x*16,40+y*16,16,16)}
   else if(H.hd==='split'){g.fillRect(256,0,256,200)}
   g.fillStyle='#101114';g.fillRect(0,205,512,51);g.fillStyle='rgba(0,0,0,.18)';g.fillRect(0,150,512,8);const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;return t}
@@ -621,7 +631,7 @@ function kartMesh(color,ghost,opt={}){const KGx=kartGeo(),M=shared(),g=new THREE
   const suit=new THREE.MeshStandardMaterial(Object.assign({map:ghost?null:suitTex(sc,num),color:ghost?0xffffff:0xffffff,roughness:.82},op)),suitPlain=new THREE.MeshStandardMaterial(Object.assign({color:sc,roughness:.85},op)),suitDark=new THREE.MeshStandardMaterial(Object.assign({color:0x17181b,roughness:.85},op));
   const helmMat=new THREE.MeshPhysicalMaterial(Object.assign({map:ghost?null:helmTex2(LV),color:0xffffff,roughness:.14,metalness:.05,clearcoat:1,clearcoatRoughness:.05},op));
   const torso=add(KGx.torso,suit,-.3,.55,0,drv);torso.rotation.z=.36;
-  const shL=new THREE.Vector3(-.23,.75,-.19),shR=new THREE.Vector3(-.23,.75,.19);add(KGx.joint,suitPlain,shL.x,shL.y,shL.z,drv).scale.setScalar(1.6);add(KGx.joint,suitPlain,shR.x,shR.y,shR.z,drv).scale.setScalar(1.6);
+  const shL=new THREE.Vector3(-.23,.75,-.19),shR=new THREE.Vector3(-.23,.75,.19);add(KGx.joint,suitPlain,shL.x,shL.y,shL.z,drv).scale.setScalar(1.1);add(KGx.joint,suitPlain,shR.x,shR.y,shR.z,drv).scale.setScalar(1.1);
   for(const z of[-.11,.11]){const th=add(KGx.leg,suitDark,0,0,0,drv);setLimb(th,new THREE.Vector3(-.26,.24,z),new THREE.Vector3(.12,.27,z*1.05));
     const sh=add(KGx.leg,suitDark,0,0,0,drv);setLimb(sh,new THREE.Vector3(.12,.27,z*1.05),new THREE.Vector3(.52,.17,z*1.1));sh.scale.x=sh.scale.z=.85;add(KGx.boot,M.boot,.57,.15,z*1.1).rotation.z=.5}
   const head=new THREE.Group();head.position.set(-.18,.95,0);drv.add(head);add(KGx.neck,suitDark,-.02,-.13,0,head,false);add(KGx.helm,helmMat,0,0,0,head,false);
@@ -747,6 +757,7 @@ class EngineDSP{constructor(sr,seed){this.sr=sr;this.ph=0;this.n=0;this.seed=see
         if(load<.06&&this.spool>.3){this.fl+=19/sr;if((this.fl%1)<.35)s+=wn*.16*this.spool;this.spool-=.00002}}
       if(this.muff>0){this.mlp+=(s-this.mlp)*(1-this.muff*.8);s=this.mlp*(1+this.muff*.6)}
       s=Math.tanh(s*1.3);const yv=s-this.hpx+.996*this.hp;this.hpx=s;this.hp=yv;o[i]=yv*.55*this.gv}}}
+const VOL=Object.assign({master:1,engine:1,fx:1},store.get('hks-vol')||{});
 const AudioK=(()=>{let ctx=null,muted=false,master,noise,E=null,R=null,windG,scrG,sqG,sqF,rPan=null,rLp=null;
   const ENG={v10:{name:'V10',cyl:10,pA:590,pB:655,turbo:0,muff:0,red:18200,gears:7,ev:0},v8:{name:'V8',cyl:8,pA:515,pB:570,turbo:0,muff:.12,red:18000,gears:7,ev:0},
     v6:{name:'V6 turbo',cyl:6,pA:430,pB:468,turbo:1,muff:.55,red:13500,gears:8,ev:0},ev:{name:'Electric',cyl:2,pA:500,pB:500,turbo:0,muff:0,red:12000,gears:1,ev:1}};
@@ -777,28 +788,29 @@ process(i,o){this.d.render(o[0][0]);return true}}registerProcessor('v10',V10Proc
     s.rpm+=(target-s.rpm)*Math.min(1,dt*(isPlayer?30:14));if(s.cut>0)s.cut-=dt;return s.rpm}
   return{start(){if(ctx||muted)return;try{ctx=new (window.AudioContext||window.webkitAudioContext)();
       const comp=ctx.createDynamicsCompressor();comp.threshold.value=-12;comp.ratio.value=4;comp.attack.value=.003;comp.release.value=.12;comp.connect(ctx.destination);
-      master=ctx.createGain();master.gain.value=.6;master.connect(comp);
+      master=ctx.createGain();master.gain.value=.6*VOL.master;master.connect(comp);
       {const len=Math.floor(ctx.sampleRate*1.7),ir=ctx.createBuffer(2,len,ctx.sampleRate);for(let ch=0;ch<2;ch++){const d=ir.getChannelData(ch);for(let i=0;i<len;i++){const t=i/ctx.sampleRate;d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.2)*Math.exp(-t*2.6)*(t<.012?0:1)}}
        const cv=ctx.createConvolver();cv.buffer=ir;const wet=ctx.createGain();wet.gain.value=.22;const hp=ctx.createBiquadFilter();hp.type='highpass';hp.frequency.value=250;master.connect(hp);hp.connect(cv);cv.connect(wet);wet.connect(comp)}
       noise=ctx.createBuffer(1,ctx.sampleRate,ctx.sampleRate);const d=noise.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
-      E=engine(1234,master);
+      E=engine(1234,master);E.out.gain.value=VOL.engine;
       const rg=ctx.createGain();rg.gain.value=.55;rLp=ctx.createBiquadFilter();rLp.type='lowpass';rLp.frequency.value=6000;rPan=ctx.createStereoPanner?ctx.createStereoPanner():null;
-      if(rPan){rLp.connect(rPan);rPan.connect(rg)}else rLp.connect(rg);rg.connect(master);R=engine(98765,rLp);
+      if(rPan){rLp.connect(rPan);rPan.connect(rg)}else rLp.connect(rg);rg.connect(master);R=engine(98765,rLp);R.out.gain.value=VOL.engine;
       const wn=noiseSrc(),wf=ctx.createBiquadFilter();wf.type='lowpass';wf.frequency.value=650;windG=ctx.createGain();windG.gain.value=0;wn.connect(wf);wf.connect(windG);windG.connect(master);
       const sn=noiseSrc(),sf=ctx.createBiquadFilter();sf.type='bandpass';sf.frequency.value=520;sf.Q.value=.8;scrG=ctx.createGain();scrG.gain.value=0;sn.connect(sf);sf.connect(scrG);scrG.connect(master);
       const qn=noiseSrc();sqF=ctx.createBiquadFilter();sqF.type='bandpass';sqF.frequency.value=2100;sqF.Q.value=7;sqG=ctx.createGain();sqG.gain.value=0;qn.connect(sqF);sqF.connect(sqG);sqG.connect(master)}catch(e){ctx=null}},
     update(k,dt,others,camYaw){if(!ctx||!E)return;const t=ctx.currentTime,v=Math.max(0,k.vx),thr=k.throttle,off=muted||paused,dd=dt||1/60;
       const rpm=gearbox(st,v,thr,dd,true);E.set({rpm,load:st.cut>0?0:thr,cut:st.cut>0?1:0,vol:off?0:.9});
-      windG.gain.setTargetAtTime(off?0:Math.min(.06,v*v*.00025),t,.1);
-      scrG.gain.setTargetAtTime(off||!k.scrape?0:Math.min(.22,.03+Math.abs(k.vx)*.015),t,.03);
-      const sl=Math.max(Math.min(1,k.slide||0)*.5,Math.abs(k.slipR)-.05,k.under?.12:0);sqG.gain.setTargetAtTime(off||v<2?0:Math.min(.13,sl*.42),t,.04);sqF.frequency.setTargetAtTime(1800+400*Math.min(1,sl),t,.05);
+      windG.gain.setTargetAtTime(off?0:Math.min(.06,v*v*.00025)*VOL.fx,t,.1);
+      scrG.gain.setTargetAtTime(off||!k.scrape?0:Math.min(.22,.03+Math.abs(k.vx)*.015)*VOL.fx,t,.03);
+      const sl=Math.max(Math.min(1,k.slide||0)*.5,Math.abs(k.slipR)-.05,k.under?.12:0);sqG.gain.setTargetAtTime(off||v<2?0:Math.min(.13,sl*.42)*VOL.fx,t,.04);sqF.frequency.setTargetAtTime(1800+400*Math.min(1,sl),t,.05);
       let near=null,nd=1e9;if(others)for(const o of others){if(o===k)continue;const d=Math.hypot(o.x-k.x,o.y-k.y);if(d<nd){nd=d;near=o}}
       if(near&&R){const r2=gearbox(rs,Math.max(0,near.vx),near.throttle,dd,false);const rate=lastD==null?0:(nd-lastD)/dd;lastD=nd;const dop=343/(343+C.clamp(rate,-30,30));
         R.set({rpm:r2*dop,load:rs.cut>0?0:near.throttle,cut:rs.cut>0?1:0,vol:off?0:Math.min(.9,1.6/(1+nd*nd/12))});rLp.frequency.setTargetAtTime(Math.max(1800,9000/(1+nd/10)),t,.05);
         if(rPan&&camYaw!=null){const a=Math.atan2(near.y-k.y,near.x-k.x)-camYaw;rPan.pan.setTargetAtTime(C.clamp(-Math.sin(a),-1,1)*.85,t,.05)}}
       else if(R)R.set({vol:0})},
-    thump(x){burst(.28,240,.7,Math.min(.7,x*.12),'lowpass');burst(.12,850,1,Math.min(.3,x*.05))},
-    toggle(){muted=!muted;if(!ctx&&!muted)this.start();if(master)master.gain.setTargetAtTime(muted?0:.6,ctx.currentTime,.05);return muted},
+    thump(x){burst(.28,240,.7,Math.min(.7,x*.12)*VOL.fx,'lowpass');burst(.12,850,1,Math.min(.3,x*.05)*VOL.fx)},
+    setVol(){if(!ctx)return;const t=ctx.currentTime;master.gain.setTargetAtTime(muted?0:.6*VOL.master,t,.05);if(E)E.out.gain.setTargetAtTime(VOL.engine,t,.05);if(R)R.out.gain.setTargetAtTime(VOL.engine,t,.05)},
+    toggle(){muted=!muted;if(!ctx&&!muted)this.start();if(master)master.gain.setTargetAtTime(muted?0:.6*VOL.master,ctx.currentTime,.05);return muted},
     setEngine(k){setEK(k)},get engine(){return EK.name},get gear(){return EK.ev?'E':st.gear},get rpm(){return st.rpm}}})();
 function toggleMute(){const m=AudioK.toggle();$('bMute').textContent=m?'Muted':'Sound'}
 
@@ -926,7 +938,7 @@ function render(dt){
   for(const k of karts){const m=k.mesh;m.position.set(k.x,0,-k.y);m.rotation.y=k.psi;for(const w of m.userData.wheels){if(w.front)w.piv.rotation.y=k.delta;w.spin.rotation.z=-k.wheelRot}poseKart(k,m)}
   if(ghostMesh){let show=false;if(bestRec&&player.lapStart!==null&&running){const t=simTime-player.lapStart,i=Math.floor(t*30),R=bestRec.t;
       if((i+2)*4<=R.length){const f=t*30-i,a=i*4,b=a+4;const x=R[a]+(R[b]-R[a])*f,y=R[a+1]+(R[b+1]-R[a+1])*f;let dp=R[b+2]-R[a+2];dp=Math.atan2(Math.sin(dp),Math.cos(dp));
-        ghostMesh.position.set(x,0,-y);ghostMesh.rotation.y=R[a+2]+dp*f;show=true}}ghostMesh.visible=show}
+        ghostMesh.position.set(x,0,-y);ghostMesh.rotation.y=R[a+2]+dp*f;show=true}}ghostMesh.visible=show&&GHOSTON}
   if(running&&!paused&&dt)effects(Math.min(dt,.1));
   NIGHT.U.time.value=performance.now()/1000%3600;
   REFL.update(camera);
@@ -998,6 +1010,8 @@ async function refreshLB(){$('lbClass').textContent=kclass==='adult'?'Adult':kcl
 function setClass(c){kclass=c;for(const [id,v] of [['kAdult','adult'],['kJunior','junior'],['kDrift','drift']])$(id).setAttribute('aria-pressed',c===v?'true':'false');showMyBest()}
 $('kAdult').onclick=()=>setClass('adult');$('kJunior').onclick=()=>setClass('junior');$('kDrift').onclick=()=>setClass('drift');
 $('oRev').setAttribute('aria-pressed',revGrid?'true':'false');$('oRev').onclick=()=>{revGrid=!revGrid;store.set('hks-revgrid',revGrid);$('oRev').setAttribute('aria-pressed',revGrid?'true':'false')};
+let GHOSTON=store.get('hks-ghost-on')!==false;$('oGhost').setAttribute('aria-pressed',GHOSTON?'true':'false');$('oGhost').onclick=()=>{GHOSTON=!GHOSTON;store.set('hks-ghost-on',GHOSTON);$('oGhost').setAttribute('aria-pressed',GHOSTON?'true':'false')};
+for(const [id,key] of [['vMaster','master'],['vEngine','engine'],['vFx','fx']]){const el=$(id);el.value=Math.round(VOL[key]*100);el.oninput=()=>{VOL[key]=el.value/100;store.set('hks-vol',VOL);AudioK.setVol()}}
 $('oNight').onclick=()=>{NIGHT.set(!NIGHT.on);$('oNight').setAttribute('aria-pressed',NIGHT.on?'true':'false')};
 {const G={gBase:'base',gAcc:'acc',gStyle:'style',gNum:'num',gHelm:'helm',gHelmA:'helmA',gHD:'hd',gSuit:'suit'};for(const [id,key] of Object.entries(G)){const el=$(id);el.value=GARAGE[key];
   el.oninput=el.onchange=()=>{GARAGE[key]=key==='num'?Math.max(1,Math.min(99,parseInt(el.value)||1)):el.value;store.set('hks-garage',GARAGE)}}}

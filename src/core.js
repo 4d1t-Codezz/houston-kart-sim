@@ -205,7 +205,7 @@
     k.slipR = Math.atan2(Math.abs(nvy), Math.max(av, 1)); k.slipF = k.under ? 0.3 : 0; k.locked = sl > 0.35 && brkF > 0.5;
     k.wheelRot += (nvx / 0.13) * dt;
   }
-  const CORNERS = [[0.98, 0.6], [0.98, -0.6], [-0.88, 0.66], [-0.88, -0.66], [0.1, 0.68], [0.1, -0.68]];
+  const CORNERS = [[1,0],[-0.94,0],[1,0.25],[1,-0.25],[0.99,0.45],[0.99,-0.45],[0.86,0.55],[0.86,-0.55],[0.72,0.6],[0.72,-0.6],[0.58,0.67],[0.58,-0.67],[0.45,0.63],[0.45,-0.63],[0.38,0.69],[0.38,-0.69],[0.2,0.69],[0.2,-0.69],[0,0.69],[0,-0.69],[-0.2,0.69],[-0.2,-0.69],[-0.34,0.69],[-0.34,-0.69],[-0.42,0.68],[-0.42,-0.68],[-0.5,0.68],[-0.5,-0.68],[-0.6,0.68],[-0.6,-0.68],[-0.7,0.72],[-0.7,-0.72],[-0.78,0.78],[-0.78,-0.78],[-0.85,0.7],[-0.85,-0.7],[-0.9,0.58],[-0.9,-0.58],[-0.93,0.4],[-0.93,-0.4],[-0.935,0.2],[-0.935,-0.2]]; // full kart outline
   // Barrier contact: proper rigid-body impulses at each touching corner (restitution ~0.2, plastic-on-plastic friction ~0.25),
   // including the yaw the hit puts into the kart. No heading snaps: a nose-first hit turns the kart away from the wall
   // because the push lands ahead of the centre of mass; a rear clip kicks the tail. For a moment after a hit the tyres
