@@ -611,10 +611,11 @@ const KM=(()=>{const gltf=window.__KARTGLTF;if(!gltf)return null;const sc=gltf.s
   const bake=(m,off)=>{const g=m.geometry.clone();g.applyMatrix4(m.matrixWorld);if(off)g.translate(-off.x,-off.y,-off.z);return g};
   const centerOf=n=>{const b=new THREE.Box3();for(const o of nodes[n]||[])b.expandByObject(o);return b.getCenter(new THREE.Vector3())};
   const DYN=new Set(['ART3D_GOKART_FLtire','ART3D_GOKART_FRtire','ART3D_GOKART_LRtire','ART3D_GOKART_RRtire','ART3D_GOKART_FLspindle','ART3D_GOKART_FRspindle','ART3D_GOKART_wheel','ART3D_GOKART_leddisplay','ART3D_GOKART_driver','ART3D_GOKART_helmet','ART3D_GLOBES']);
-  const byMat=new Map();for(const n in nodes){if(DYN.has(n))continue;for(const m of meshesOf(n)){const g=bake(m).toNonIndexed();const k=m.material.name;if(!byMat.has(k))byMat.set(k,{mat:m.material,geos:[]});byMat.get(k).geos.push(g)}}
+  const PANELS=new Set(['ART3D_GOKART_bodywork','ART3D_GOKART_Rearbumper','ART3D_GOKART_frontbumper','ART3D_GOKART_fnpanel']);
+  const byMat=new Map();for(const n in nodes){if(DYN.has(n))continue;for(const m of meshesOf(n)){const g=bake(m).toNonIndexed();const k=m.material.name==='ART3D_GOKART_BODYWORK'?(PANELS.has(n)?'PANEL':'FRAME'):m.material.name;if(!byMat.has(k))byMat.set(k,{mat:m.material,geos:[]});byMat.get(k).geos.push(g)}}
   const merge=geos=>{const pos=[],nor=[],uv=[];for(const g of geos){const P=g.attributes.position,Nn=g.attributes.normal,U=g.attributes.uv;for(let i=0;i<P.count;i++){pos.push(P.getX(i),P.getY(i),P.getZ(i));if(Nn)nor.push(Nn.getX(i),Nn.getY(i),Nn.getZ(i));else nor.push(0,1,0);if(U)uv.push(U.getX(i),U.getY(i));else uv.push(0,0)}}
     const G=new THREE.BufferGeometry();G.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));G.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));G.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));return G};
-  const statics=[...byMat.values()].map(v=>({geo:merge(v.geos),mat:v.mat,name:v.mat.name}));
+  const statics=[...byMat.entries()].map(([k,v])=>({geo:merge(v.geos),mat:v.mat,name:k}));
   for(const v of byMat.values()){if(v.mat.map)v.mat.map.anisotropy=8}
   const tyre=n=>{const c=centerOf(n);return{c,parts:meshesOf(n).map(m=>({geo:bake(m,c),mat:m.material}))}};
   const tyres={FL:tyre('ART3D_GOKART_FLtire'),FR:tyre('ART3D_GOKART_FRtire'),RL:tyre('ART3D_GOKART_LRtire'),RR:tyre('ART3D_GOKART_RRtire')};
@@ -622,17 +623,37 @@ const KM=(()=>{const gltf=window.__KARTGLTF;if(!gltf)return null;const sc=gltf.s
   const wc=centerOf('ART3D_GOKART_wheel');const wheel=[...meshesOf('ART3D_GOKART_wheel'),...meshesOf('ART3D_GOKART_leddisplay')].map(m=>({geo:bake(m,wc),mat:m.material}));
   const one=n=>meshesOf(n).map(m=>({geo:bake(m),mat:m.material}));const driver=one('ART3D_GOKART_driver'),helmet=one('ART3D_GOKART_helmet'),gloves=one('ART3D_GLOBES');
   const hb=new THREE.Box3();for(const o of nodes['ART3D_GOKART_helmet']||[])hb.expandByObject(o);const hc=hb.getCenter(new THREE.Vector3());
+  const vcol=(geo,fn)=>{const P=geo.attributes.position,Nn=geo.attributes.normal,c=new Float32Array(P.count*3);for(let i=0;i<P.count;i++){const v=fn(P.getX(i),P.getY(i),P.getZ(i),Nn?Nn.getX(i):0,Nn?Nn.getY(i):1,Nn?Nn.getZ(i):0);c[i*3]=v[0];c[i*3+1]=v[1];c[i*3+2]=v[2]}geo.setAttribute('color',new THREE.BufferAttribute(c,3))};
+  // driver: channel 0 = suit, 1 = boots
+  for(const p of driver)vcol(p.geo,(x,y,z)=>z>.47&&y<.34?[0,1,0]:[1,0,0]);
+  // helmet: channel 0 = paint, 1 = visor, 2 = accent stripe
+  for(const p of helmet)vcol(p.geo,(x,y,z,nx,ny,nz)=>nz>.45&&y>hc.y-.06&&y<hc.y+.045?[0,1,0]:Math.abs(x-hc.x)<.028&&y>hc.y+.02?[0,0,1]:[1,0,0]);
+  let suitN=null;{const m=(driver[0]||{}).mat;if(m&&m.map){suitN=m.map.clone();suitN.encoding=THREE.LinearEncoding;suitN.needsUpdate=true}}
   const axis=new THREE.Vector3(0,wc.y-.16,wc.z-.62).normalize(),swq=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1),axis),rot=new THREE.Matrix4().makeRotationFromQuaternion(swq.clone().invert());
   for(const p of wheel)p.geo.applyMatrix4(rot);
-  return{statics,tyres,spL,spR,wc,axis,swq,wheel,driver,helmet,gloves,eye:{x:hc.z+.06,y:hc.y+.01}}})();
+  return{suitN,statics,tyres,spL,spR,wc,axis,swq,wheel,driver,helmet,gloves,eye:{x:hc.z+.06,y:hc.y+.01}}})();
 if(KM){HC_EYE.x=KM.eye.x;HC_EYE.y=KM.eye.y}
+function triMat(base,cols,extra){const m=new THREE[extra&&extra.clearcoat?'MeshPhysicalMaterial':'MeshStandardMaterial'](Object.assign({color:0xffffff,vertexColors:true},extra||{}));const C3=cols.map(c=>new THREE.Color(c));
+  m.onBeforeCompile=sh=>{sh.uniforms.cA={value:C3[0]};sh.uniforms.cB={value:C3[1]};sh.uniforms.cC={value:C3[2]};
+    sh.fragmentShader='uniform vec3 cA;uniform vec3 cB;uniform vec3 cC;\n'+sh.fragmentShader.replace('#include <color_fragment>','diffuseColor.rgb*=cA*vColor.r+cB*vColor.g+cC*vColor.b;')};return m}
+// livery painted in the bodywork's own UV layout (side pods top, nose/front panel centre, bumpers right)
+function modelLivery(LV){const c=document.createElement('canvas');c.width=c.height=1024;const g=c.getContext('2d'),B=LV.base,A=LV.acc||LV.base;
+  g.fillStyle=B;g.fillRect(0,0,1024,1024);
+  const shard=(x,y,w,h,col)=>{g.fillStyle=col;g.beginPath();g.moveTo(x,y+h);g.lineTo(x+w*.55,y);g.lineTo(x+w,y);g.lineTo(x+w*.45,y+h);g.closePath();g.fill()};
+  for(const [x0,x1] of [[100,470],[540,915]]){for(let i=0;i<4;i++)shard(x0+20+i*85,200,70,125,i%2?A:'#f3f4f5');g.fillStyle='#111214';g.fillRect(x0,300,x1-x0,26);g.fillStyle=A;g.fillRect(x0,15,x1-x0,22);g.fillRect(x0,75,x1-x0,14)}
+  g.fillStyle=A;g.fillRect(400,380,90,430);g.fillStyle='#f3f4f5';g.fillRect(432,380,26,430);
+  g.fillStyle=A;g.fillRect(840,360,40,650);g.fillRect(640,360,30,660);g.fillStyle='#111214';g.fillRect(960,630,40,90);
+  for(let i=0;i<500;i++){g.fillStyle='rgba(0,0,0,'+(Math.random()*.12).toFixed(3)+')';g.fillRect(Math.random()*1024,Math.random()*1024,1+Math.random()*20,1)}
+  const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.anisotropy=8;t.flipY=true;return t}
 function modelKart(color,opt){const LV=opt.liv||{base:hex(color),acc:hex(color),helm:'#f2f2f2',suit:hex(color)};const g=new THREE.Group(),body=new THREE.Group();g.add(body);
   const holder=new THREE.Group();holder.rotation.y=Math.PI/2;body.add(holder);
-  const paint=new THREE.MeshPhysicalMaterial({color:new THREE.Color(LV.base),roughness:.3,metalness:0,clearcoat:.9,clearcoatRoughness:.12});
-  const suit=new THREE.MeshStandardMaterial({color:new THREE.Color(LV.suit),roughness:.82});const helm=new THREE.MeshPhysicalMaterial({color:new THREE.Color(LV.helm),roughness:.15,clearcoat:1,clearcoatRoughness:.05});
+  const paint=new THREE.MeshPhysicalMaterial({color:0xffffff,map:modelLivery(LV),roughness:.32,metalness:0,clearcoat:.9,clearcoatRoughness:.12});
+  const frame=MAT.kmFrame||(MAT.kmFrame=new THREE.MeshStandardMaterial({color:0xb4b9bf,roughness:.3,metalness:.85}));
+  const suit=triMat(null,[LV.suit,'#141517','#141517'],{roughness:.78,normalMap:KM.suitN,normalScale:new THREE.Vector2(1,1)});
+  const helm=triMat(null,[LV.helm,'#07090c',LV.helmA||LV.acc||'#ffffff'],{clearcoat:1,clearcoatRoughness:.05,roughness:.18});
   const glove=new THREE.MeshStandardMaterial({color:0x151618,roughness:.75});
   const mk=(geo,mat,par)=>{const m=new THREE.Mesh(geo,mat);m.castShadow=true;m.receiveShadow=true;par.add(m);return m};
-  for(const st of KM.statics){const isPaint=st.name==='ART3D_GOKART_BODYWORK';const mat=isPaint?(st.mat.map?Object.assign(paint.clone(),{map:st.mat.map}):paint):st.mat;mk(st.geo,mat,holder)}
+  for(const st of KM.statics){const mat=st.name==='PANEL'?paint:st.name==='FRAME'?frame:st.mat;mk(st.geo,mat,holder)}
   const wheels=[];for(const [key,front] of [['FL',1],['FR',1],['RL',0],['RR',0]]){const t=KM.tyres[key];const piv=new THREE.Group();piv.position.copy(t.c);holder.add(piv);const spin=new THREE.Group();piv.add(spin);
     for(const p of t.parts)mk(p.geo,p.mat,spin);if(key==='FL')for(const p of KM.spL)mk(p.geo,p.mat,piv);if(key==='FR')for(const p of KM.spR)mk(p.geo,p.mat,piv);wheels.push({piv,spin,front:!!front,axis:'x'})}
   const sw=new THREE.Group();sw.position.copy(KM.wc);sw.quaternion.copy(KM.swq);holder.add(sw);const rim=new THREE.Group();sw.add(rim);
